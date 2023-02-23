@@ -1,0 +1,219 @@
+_schema-version: '3.1'
+ID: crystalcicdtesting0223
+version: 1.0.0
+description: A simple CAP project.
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - rm -rf build/ui-deployer
+        - mkdir -p build/ui-deployer
+        - rm -rf build/dist
+        - mkdir -p build/dist
+    - builder: custom
+      commands:
+        - npm install --production
+        - >-
+          bash -c "cds -v | grep 'cds-dk' || npm i --production --no-save
+          @sap/cds-dk @sap/mdk-tools"
+        - bash -c "export PATH=$PATH:$(pwd)/node_modules/.bin"
+        - cds build --production
+modules:
+  - name: crystalcicdtesting0223-MDKAPP
+    type: html5
+    path: app/MDKAPP
+    build-parameters:
+      builder: custom
+      commands:
+        - npx -p @sap/mdk-tools mdk build --target module --ui5 --forceUpdate
+        - bash -c "cd Web/MDKModule && rm -rf .npmrc && npm install"
+        - bash -c "cd Web/MDKModule && npm run build"
+        - >-
+          bash -c "mv Web/MDKModule/MDKModule-content.zip
+          ../../build/dist/MDKAPP.zip"
+        - rm -rf Web/MDKModule/dist
+      _artifactName: MDKAPP.zip
+      supported-platforms: []
+      build-result: ../../build/dist
+  - name: crystalcicdtesting0223-crystalcicdtesting0223.FioriUIAPP
+    type: html5
+    path: app/crystalcicdtesting0223.FioriUIAPP
+    build-parameters:
+      builder: custom
+      commands:
+        - rm -rf dist-zip dist
+        - >-
+          npx -p @ui5/cli ui5 build --dest dist
+          --include-task=generateManifestBundle
+          --include-task=generateCachebusterInfo
+        - mkdir dist-zip
+        - >-
+          bash -c "cd dist && npx bestzip
+          ../dist-zip/crystalcicdtesting0223FioriUIAPP.zip *"
+      _artifactName: crystalcicdtesting0223FioriUIAPP.zip
+      supported-platforms: []
+      build-result: dist-zip
+  - name: crystalcicdtesting0223-db-deployer
+    type: hdb
+    path: gen/db
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm
+      ignore:
+        - node_modules
+        - package-lock.json
+    requires:
+      - name: crystalcicdtesting0223-service-uaa
+      - name: crystalcicdtesting0223-service-db
+  - name: crystalcicdtesting0223-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      memory: 256MB
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+    build-parameters:
+      builder: npm
+      ignore:
+        - node_modules
+        - package-lock.json
+    requires:
+      - name: crystalcicdtesting0223-service-uaa
+      - name: crystalcicdtesting0223-service-db
+      - name: crystalcicdtesting0223-service-destination
+      - name: crystalcicdtesting0223-service-metadata
+      - name: crystalcicdtesting0223-service-connectivity
+      - name: crystalcicdtesting0223-service-logs
+  - name: crystalcicdtesting0223-aux-destinations
+    type: com.sap.application.content
+    parameters:
+      content:
+        subaccount:
+          existing_destinations_policy: update
+          destinations:
+            - Authentication: OAuth2UserTokenExchange
+              Name: crystalcicdtesting0223-service-uaa
+              ServiceInstanceName: crystalcicdtesting0223-uaa
+              ServiceKeyName: crystalcicdtesting0223-uaa-key
+              sap.cloud.service: lcap.crystalcicdtesting0223
+            - Authentication: OAuth2UserTokenExchange
+              Name: crystalcicdtesting0223-app-srv
+              TokenServiceInstanceName: crystalcicdtesting0223-uaa
+              TokenServiceKeyName: crystalcicdtesting0223-uaa-key
+              URL: ~{srv-api/srv-url}
+              sap.cloud.service: lcap.crystalcicdtesting0223
+            - Name: crystalcicdtesting0223-service-html5-apps-repo-host
+              ServiceInstanceName: crystalcicdtesting0223-html5-apps-repo-host
+              ServiceKeyName: crystalcicdtesting0223-html5-apps-repo-host-key
+              sap.cloud.service: lcap.crystalcicdtesting0223
+    build-parameters:
+      no-source: true
+    requires:
+      - name: crystalcicdtesting0223-service-uaa
+        parameters:
+          service-key:
+            name: crystalcicdtesting0223-uaa-key
+      - name: srv-api
+      - name: crystalcicdtesting0223-service-html5-apps-repo-host
+        parameters:
+          service-key:
+            name: crystalcicdtesting0223-html5-apps-repo-host-key
+      - name: crystalcicdtesting0223-service-destination
+        parameters:
+          content-target: true
+  - name: crystalcicdtesting0223-launchpad
+    type: html5
+    path: build/launchpad
+    build-parameters:
+      builder: custom
+      commands:
+        - npm install
+        - >-
+          npx -p @ui5/cli ui5 build --dest dist
+          --include-task=generateManifestBundle
+          --include-task=generateCachebusterInfo
+        - bash -c "cd dist && npx bestzip ../../../build/dist/launchpad.zip *"
+        - rm -rf dist
+      _artifactName: launchpad.zip
+      supported-platforms: []
+      build-result: ../../build/dist
+  - name: crystalcicdtesting0223-aux-ui-deployer
+    type: com.sap.application.content
+    path: build/ui-deployer
+    build-parameters:
+      build-result: resources
+      requires:
+        - name: crystalcicdtesting0223-MDKAPP
+          artifacts:
+            - MDKAPP.zip
+          target-path: resources
+        - name: crystalcicdtesting0223-crystalcicdtesting0223.FioriUIAPP
+          artifacts:
+            - crystalcicdtesting0223FioriUIAPP.zip
+          target-path: resources
+        - name: crystalcicdtesting0223-launchpad
+          artifacts:
+            - launchpad.zip
+          target-path: resources
+    requires:
+      - name: crystalcicdtesting0223-service-html5-apps-repo-host
+        parameters:
+          content-target: true
+resources:
+  - type: org.cloudfoundry.managed-service
+    name: crystalcicdtesting0223-service-uaa
+    parameters:
+      service: xsuaa
+      service-plan: application
+      service-name: crystalcicdtesting0223-uaa
+      path: xs-security.json
+      config:
+        xsappname: crystalcicdtesting0223-${space}
+        role-collections: []
+  - type: org.cloudfoundry.managed-service
+    name: crystalcicdtesting0223-service-db
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+      service-name: crystalcicdtesting0223-db
+  - type: org.cloudfoundry.managed-service
+    name: crystalcicdtesting0223-service-destination
+    parameters:
+      service: destination
+      service-plan: lite
+      service-name: crystalcicdtesting0223-destination
+      config:
+        HTML5Runtime_enabled: true
+        version: 1.0.0
+  - type: org.cloudfoundry.user-provided-service
+    name: crystalcicdtesting0223-service-metadata
+    parameters:
+      service: metadata
+      service-plan: standard
+      service-name: crystalcicdtesting0223-metadata
+      config:
+        default-domain: ${default-domain}
+  - type: org.cloudfoundry.managed-service
+    name: crystalcicdtesting0223-service-connectivity
+    parameters:
+      service: connectivity
+      service-plan: lite
+      service-name: crystalcicdtesting0223-connectivity
+  - type: org.cloudfoundry.managed-service
+    name: crystalcicdtesting0223-service-logs
+    parameters:
+      service: application-logs
+      service-plan: lite
+      service-name: crystalcicdtesting0223-logs
+  - type: org.cloudfoundry.managed-service
+    name: crystalcicdtesting0223-service-html5-apps-repo-host
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-host
+      service-name: crystalcicdtesting0223-html5-apps-repo-host

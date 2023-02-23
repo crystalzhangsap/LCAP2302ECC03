@@ -1,0 +1,38 @@
+---
+general:
+  buildTool: "mta"
+service:
+  buildToolVersion: "MBTJ11N16"
+stages:
+  Build:
+    mavenExecuteStaticCodeChecks: false
+    npmExecuteLint: false
+  Additional Unit Tests:
+    npmExecuteScripts: false
+    karmaExecuteTests: false
+  Acceptance:
+    cloudFoundryDeploy: false
+    cfApiEndpoint: ""
+    cfOrg: ""
+    cfSpace: ""
+    cfCredentialsId: ""
+    uiVeri5ExecuteTests: false
+  Compliance:
+    sonarExecuteScan: false
+  Release:
+    cloudFoundryDeploy: true
+    cfApiEndpoint: "https://api.cf.sap.hana.ondemand.com"
+    cfOrg: "LCAP_qa"
+    cfSpace: "qa"
+    cfCredentialsId: "crystal-cf-credential"
+    tmsUpload: false
+steps:
+  mtaBuild:
+    dockerImage: "devxci/mbtci-java11-node16@sha256:caba6f24a7abc2be53199ca892de143ad6dd26de36cc7dabbd19230afbfd38d7"
+  artifactPrepareVersion:
+    versioningType: "cloud_noTag"
+  cloudFoundryDeploy:
+    mtaDeployParameters: "-f --version-rule ALL"
+  tmsUpload:
+    nodeName: ""
+    credentialsId: ""
