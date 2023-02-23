@@ -1,0 +1,8 @@
+{
+    "_Type": "Action.Type.ApplicationUpdate",
+    "ActionResult": {
+        "_Name": "AppUpdate"
+    },
+    "OnFailure": "/MDKAPP/Rules/AppUpdateFailure.js",
+    "OnSuccess": "/MDKAPP/Rules/AppUpdateSuccess.js"
+}
